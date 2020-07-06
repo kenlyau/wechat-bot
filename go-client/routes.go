@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gorilla/mux"
+	"go-client/api"
 	"net/http"
 )
 
@@ -22,9 +23,11 @@ func init() {
 	dir := "./static"
 	router.HandleFunc("/", HomeHandler).Methods("GET")
 	router.PathPrefix("/static/").Handler(http.StripPrefix("/static", http.FileServer((http.Dir(dir)))))
-	web := router.PathPrefix("/web").Subrouter()
-	api := router.PathPrefix("/api").Subrouter()
+	rWeb := router.PathPrefix("/web").Subrouter()
+	rApi := router.PathPrefix("/api").Subrouter()
 
-	web.HandleFunc("/", DefaultHandle).Methods("GET")
-	api.HandleFunc("/", DefaultHandle).Methods("GET")
+	rWeb.HandleFunc("/", DefaultHandle).Methods("GET")
+	rApi.HandleFunc("/", DefaultHandle).Methods("GET")
+
+	rApi.HandleFunc("/wx_user_list", api.GetWxUserList).Methods("GET")
 }

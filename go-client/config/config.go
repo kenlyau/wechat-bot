@@ -4,18 +4,14 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config struct {
+type StConfig struct {
 	DllServer string
 	Port      string
 }
 
-var config Config
+var Config StConfig
 
-func GetConfig() Config {
-	return config
-}
-
-func init() {
+func SetUp() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
 
@@ -23,5 +19,5 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	viper.Unmarshal(&config)
+	viper.Unmarshal(&Config)
 }

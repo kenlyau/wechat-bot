@@ -8,20 +8,18 @@ import (
 	"time"
 )
 
+func init() {
+	config.SetUp()
+	ws.SetUp()
+}
 func main() {
-
-	cfg := config.GetConfig()
-	log.Println((cfg))
-
-	wsClient := ws.NewClient(cfg.DllServer)
-	defer wsClient.Conn.Close()
-	wsClient.Start()
 
 	srv := &http.Server{
 		Handler:      router,
-		Addr:         ":" + cfg.Port,
+		Addr:         ":" + config.Config.Port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+	ws.RecvLog()
 	log.Fatal(srv.ListenAndServe())
 }
