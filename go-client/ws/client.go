@@ -2,17 +2,25 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"go-client/config"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 var client *Client
+
+func GetWxClient() *Client {
+	return client
+}
 
 type Params struct {
 	Id      string `json:"id"`
@@ -48,6 +56,29 @@ type Client struct {
 	Users []User
 }
 
+func (c *Client) UpdateUsers(message *Message) {
+	sytemWxids := "@floatbottle@medianote@weixin@newsapp@fmessage"
+	//强转slice
+	sli := reflect.ValueOf(message.Content)
+	users := make([]User, 0)
+	for i := 0; i < sli.Len(); i++ {
+		j, _ := json.Marshal(sli.Index(i).Interface())
+		user := &User{}
+		json.Unmarshal(j, user)
+		if strings.Contains(user.Wxid, "@chatroom") {
+			user.Type = "chatroom"
+		} else if strings.Contains(sytemWxids, "@"+user.Wxid) {
+			user.Type = "system"
+		} else if strings.HasPrefix(user.Wxid, "gh_") {
+			user.Type = "mp"
+		} else {
+			user.Type = "user"
+		}
+		users = append(users, *user)
+	}
+	c.Users = users
+}
+
 func SetUp() {
 	log.Println("new ws client")
 	u := url.URL{Scheme: "ws", Host: config.Config.DllServer, Path: ""}
@@ -60,7 +91,7 @@ func SetUp() {
 		Conn: conn,
 	}
 	//初始化发起获取用户列表请求
-	GetWxUserList()
+	client.GetWxUserList()
 
 }
 
@@ -73,16 +104,18 @@ func RecvLog() {
 			_, msg, err := client.Conn.ReadMessage()
 			if err != nil {
 				log.Println("read:", err)
-				return
+				continue
 			}
-			log.Printf("recv %s", msg)
 			message := &Message{}
 			err = json.Unmarshal(msg, message)
+
 			if err != nil {
 				log.Println("json parse message error:", err)
-				return
+				continue
 			}
-
+			if message.Type == HEART_BEAT {
+				continue
+			}
 			SwitchMessage(message)
 		}
 	}()
@@ -90,32 +123,81 @@ func RecvLog() {
 
 func SwitchMessage(message *Message) {
 	log.Printf("%+v", message)
+	commands := config.GetCommands()
 	switch message.Type {
 	case GET_USER_LIST_SUCCESS:
-		//强转slice
-		sli := reflect.ValueOf(message.Content)
-		users := make([]User, 0)
-		for i := 0; i < sli.Len(); i++ {
-			j, _ := json.Marshal(sli.Index(i).Interface())
-			user := &User{}
-			json.Unmarshal(j, user)
-			users = append(users, *user)
-		}
-		client.Users = users
-		log.Printf("%+v", users)
+		client.UpdateUsers(message)
 	case RECV_TEXT_MSG:
-		if message.Sender == "newall" && message.Content == "Ping" {
-			PostTxtMessage("success", "newall")
+		log.Println(commands)
+		log.Println(commands[message.Sender])
+		if commands[message.Sender] != nil {
+
+			execUserCommands(message.Sender, message)
+		}
+		// if message.Sender == "newall" && message.Content == "Ping" {
+		// 	client.PostTxtMessage("success", "newall")
+		// }
+	}
+}
+
+func execUserCommands(user string, message *Message) {
+	commands := config.GetCommands()
+	myCommands := commands[user]
+	for k, v := range myCommands {
+		if strings.HasPrefix(message.Content.(string), "#"+k) {
+			switch v.Classify {
+			case "template":
+				execTemplateCommand(user, message, v)
+				continue
+			case "hook":
+				execHookCommand(user, message, v)
+				continue
+			}
+			break
 		}
 	}
+}
+
+func execTemplateCommand(user string, message *Message, command config.Command) {
+	templates := config.GetTemplates()
+	if templates[command.Variate] != "" {
+		templateString := templates[command.Variate]
+		msg := fmt.Sprintf(templateString, "success")
+		client.PostTxtMessage(msg, user)
+	}
+}
+
+func execHookCommand(user string, message *Message, command config.Command) {
+
+	str := fmt.Sprintf(
+		"user=%s&id=%s&content=%s&sender=%s&srvid=%s&time=%s",
+		user, message.Id, message.Content, message.Sender, message.Srvid, message.Time,
+	)
+	res, err := http.Post(command.Variate, "application/x-www-form-urlencoded", strings.NewReader(str))
+	if err != nil {
+		log.Println("exec hook command error:", err)
+		return
+	}
+	log.Println("res:", res)
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Println("exec hook command response error:", err)
+		return
+	}
+	client.PostTxtMessage(string(body), user)
 }
 
 func Close() {
 	client.Conn.Close()
 }
 
-func WriteMessage(p *Params) {
-	err := client.Conn.WriteMessage(websocket.TextMessage, p.Json())
+func (c *Client) WriteMessage(p *Params) {
+	if len(p.Content) > 1024 {
+		log.Println("消息文字最大1024", p.Id)
+		return
+	}
+	err := c.Conn.WriteMessage(websocket.TextMessage, p.Json())
 	log.Println(string(p.Json()))
 	if err != nil {
 		log.Println("websocket write message error:", err)
@@ -123,22 +205,22 @@ func WriteMessage(p *Params) {
 		log.Printf("websocket write message success")
 	}
 }
-func GetWxUserList() {
+func (c *Client) GetWxUserList() {
 	params := &Params{
 		Type:    USER_LIST,
 		Content: "user list",
 		Wxid:    "null",
 	}
-	WriteMessage(params)
+	c.WriteMessage(params)
 }
 
-func PostTxtMessage(content string, wxid string) {
+func (c *Client) PostTxtMessage(content string, wxid string) {
 	params := &Params{
 		Type:    TXT_MSG,
 		Content: content,
 		Wxid:    wxid,
 	}
-	WriteMessage(params)
+	c.WriteMessage(params)
 }
 
 // func (c *Client) Start() {

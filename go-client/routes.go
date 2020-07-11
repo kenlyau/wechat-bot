@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
 	"go-client/api"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 var router *mux.Router = mux.NewRouter()
@@ -30,4 +31,5 @@ func init() {
 	rApi.HandleFunc("/", DefaultHandle).Methods("GET")
 
 	rApi.HandleFunc("/wx_user_list", api.GetWxUserList).Methods("GET")
+	rApi.HandleFunc("/wx_txt_message", api.PostTxtMessage).Methods("POST")
 }

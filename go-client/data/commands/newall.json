@@ -1,0 +1,11 @@
+{
+    "ping": {
+        "classify": "template",
+        "variate": "sample"
+    },
+    "open": {
+        "classify": "hook",
+        "variate": "http://www.baidu.com"
+    }
+}
+
