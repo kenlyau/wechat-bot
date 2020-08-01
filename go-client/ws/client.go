@@ -160,11 +160,13 @@ func execUserCommands(user string, message *Message) {
 
 func execTemplateCommand(user string, message *Message, command config.Command) {
 	templates := config.GetTemplates()
+	templateString := "%s"
 	if templates[command.Variate] != "" {
-		templateString := templates[command.Variate]
-		msg := fmt.Sprintf(templateString, "success")
-		client.PostTxtMessage(msg, user)
+		templateString = templates[command.Variate]
+
 	}
+	msg := fmt.Sprintf(templateString, "success")
+	client.PostTxtMessage(msg, user)
 }
 
 func execHookCommand(user string, message *Message, command config.Command) {

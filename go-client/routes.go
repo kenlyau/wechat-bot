@@ -31,5 +31,5 @@ func init() {
 	rApi.HandleFunc("/", DefaultHandle).Methods("GET")
 
 	rApi.HandleFunc("/wx_user_list", api.GetWxUserList).Methods("GET")
-	rApi.HandleFunc("/wx_txt_message", api.PostTxtMessage).Methods("POST")
+	rApi.HandleFunc("/wx_txt_message", api.PostTxtMessage).Methods("GET")
 }
